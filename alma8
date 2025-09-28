@@ -1,0 +1,205 @@
+# Aktualizace systému
+dnf update -y
+
+# Instalace VNC serveru, X2Go a dalších potřebných balíčků
+dnf install -y epel-release
+dnf config-manager --set-enabled powertools
+dnf install -y tigervnc-server x2goserver x2goserver-xsession
+dnf install -y quota xfsprogs gdm gnome-session gnome-terminal
+dnf install -y firefox gedit nautilus
+______________________
+# Vytvoření skupin
+groupadd teachers
+groupadd students
+
+# Ověření vytvoření
+grep -E "^(teachers|students)" /etc/group
+______________________
+# Přidání quota do /etc/fstab (pro root souborový systém)
+cp /etc/fstab /etc/fstab.backup
+sed -i 's/\(.*\s\/\s.*defaults\)/\1,usrquota,grpquota/' /etc/fstab
+
+# Restart pro aplikování změn
+systemctl reboot
+
+# Po restartu - inicializace kvót
+quotacheck -cug /
+quotaon /
+
+# Ověření
+quotaon -p /
+______________________
+#!/bin/bash
+# Skript pro vytvoření studentských účtů
+
+for i in $(seq -w 1 20); do
+    USERNAME="u$i"
+    PASSWORD="${i#0}"  # Odstraní leading zero pro heslo
+    VNC_PASS="${i#0}${i#0}${i#0}"  # 3x číslo pro VNC
+    
+    # Vytvoření uživatele
+    useradd -m -g students -s /bin/bash "$USERNAME"
+    
+    # Nastavení hesla
+    echo "$USERNAME:$PASSWORD" | chpasswd
+    
+    # Nastavení kvóty na 2GB
+    setquota -u "$USERNAME" 1900000 2000000 0 0 /
+    
+    # Vytvoření VNC hesla
+    mkdir -p /home/$USERNAME/.vnc
+    echo "$VNC_PASS" | vncpasswd -f > /home/$USERNAME/.vnc/passwd
+    chmod 600 /home/$USERNAME/.vnc/passwd
+    chown -R $USERNAME:students /home/$USERNAME/.vnc
+    
+    echo "Vytvořen uživatel: $USERNAME, heslo: $PASSWORD, VNC: $VNC_PASS"
+done
+______________________
+#!/bin/bash
+# Skript pro vytvoření učitelských účtů
+
+TEACHERS=("zim" "micha" "pau")
+VNC_TEACHER_PASS="Agent007"
+
+for teacher in "${TEACHERS[@]}"; do
+    # Vytvoření uživatele
+    useradd -m -g teachers -s /bin/bash "$teacher"
+    
+    # Dočasné heslo (nutno změnit)
+    echo "$teacher:changeme123" | chpasswd
+    chage -d 0 "$teacher"  # Vynutí změnu hesla při prvním přihlášení
+    
+    # Nastavení kvóty na 5GB
+    setquota -u "$teacher" 4900000 5000000 0 0 /
+    
+    # Nastavení VNC hesla
+    mkdir -p /home/$teacher/.vnc
+    echo "$VNC_TEACHER_PASS" | vncpasswd -f > /home/$teacher/.vnc/passwd
+    chmod 600 /home/$teacher/.vnc/passwd
+    chown -R $teacher:teachers /home/$teacher/.vnc
+    
+    echo "Vytvořen učitel: $teacher, VNC heslo: $VNC_TEACHER_PASS"
+done
+______________________
+# Vytvoření systemd service pro VNC
+cat > /etc/systemd/system/vncserver@.service << 'EOF'
+[Unit]
+Description=Remote Desktop VNC Service for %i
+After=syslog.target network.target
+
+[Service]
+Type=forking
+User=%i
+Group=students
+WorkingDirectory=/home/%i
+ExecStartPre=/bin/sh -c '/usr/bin/vncserver -kill :%i > /dev/null 2>&1 || :'
+ExecStart=/usr/bin/vncserver -autokill :%i -geometry 1024x768
+ExecStop=/usr/bin/vncserver -kill :%i
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+______________________
+#!/bin/bash
+# Spuštění VNC služeb pro studenty
+
+for i in $(seq -w 1 20); do
+    USERNAME="u$i"
+    PORT_NUM="${i#0}"  # Port číslo bez leading zero
+    
+    # Povolení služby
+    systemctl enable vncserver@$PORT_NUM
+    systemctl start vncserver@$PORT_NUM
+    
+    echo "VNC server pro $USERNAME běží na portu 59$(printf %02d $PORT_NUM)"
+done
+
+# Restart systemd
+systemctl daemon-reload
+______________________
+#!/bin/bash
+# VNC pro učitele na vyšších portech
+
+TEACHERS=("zim" "micha" "pau")
+START_PORT=21
+
+for i in "${!TEACHERS[@]}"; do
+    teacher="${TEACHERS[$i]}"
+    port=$((START_PORT + i))
+    
+    # Kopie service pro učitele
+    cp /etc/systemd/system/vncserver@.service /etc/systemd/system/vncserver-teacher@.service
+    sed -i 's/Group=students/Group=teachers/' /etc/systemd/system/vncserver-teacher@.service
+    
+    systemctl enable vncserver-teacher@$port
+    systemctl start vncserver-teacher@$port
+    
+    echo "VNC server pro $teacher běží na portu 59$(printf %02d $port)"
+done
+______________________
+# Spuštění X2Go serveru
+systemctl enable x2gocleansessions
+systemctl start x2gocleansessions
+
+# Konfigurace pro automatické přihlášení bez hesla pro studenty
+# (vyžaduje speciální nastavení PAM nebo SSH klíče)
+______________________
+# Otevření portů pro VNC (5901-5925)
+for port in $(seq 5901 5925); do
+    firewall-cmd --permanent --add-port=$port/tcp
+done
+
+# Otevření portů pro X2Go
+firewall-cmd --permanent --add-port=22/tcp
+firewall-cmd --permanent --add-service=ssh
+
+# Aplikování změn
+firewall-cmd --reload
+______________________
+# Zobrazení všech kvót
+repquota -a /
+
+# Kontrola konkrétního uživatele
+quota -u u01
+
+______________________
+# Status všech VNC služeb
+systemctl status vncserver@*
+
+# Restart konkrétní služby
+systemctl restart vncserver@1
+
+______________________
+#!/bin/bash
+# restart-vnc.sh
+
+echo "Restartování VNC služeb..."
+
+# Studenti
+for i in $(seq 1 20); do
+    systemctl restart vncserver@$i
+    echo "Restartován VNC pro u$(printf %02d $i)"
+done
+
+# Učitelé
+for i in $(seq 21 23); do
+    systemctl restart vncserver-teacher@$i
+    echo "Restartován VNC pro učitele na portu $i"
+done
+
+echo "Všechny VNC služby restartovány."
+
+______________________
+# Omezení SSH pouze na potřebné uživatele
+echo "AllowGroups teachers" >> /etc/ssh/sshd_config
+
+# Nastavení automatického odhlášení nečinných VNC relací
+echo 'export TMOUT=1800' >> /etc/profile
+
+# Restart SSH
+systemctl restart sshd
+
+______________________
+
