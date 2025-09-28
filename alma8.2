@@ -1,12 +1,36 @@
-# Jednoduchý startup script
-cat > /etc/rc.local << 'EOF'
-#!/bin/bash
-# Auto-start filebrowser
-nohup /usr/local/bin/filebrowser --database /etc/filebrowser/filebrowser.db --address 0.0.0.0 --port 8080 --root /home > /var/log/filebrowser.log 2>&1 &
-exit 0
-EOF
+# 1. Nejdřív zkontroluj že filebrowser běží
+ps aux | grep filebrowser
 
-chmod +x /etc/rc.local
+# 2. Přidání studentů do databáze
+DB="/etc/filebrowser/filebrowser.db"
 
-# Test
-/etc/rc.local
+for i in $(seq -w 1 20); do
+    USERNAME="u$i"
+    PASSWORD="$i" 
+    HOMEDIR="/home/$USERNAME"
+    
+    filebrowser users add "$USERNAME" "$PASSWORD" \
+        --scope "$HOMEDIR" \
+        --perm.create \
+        --perm.delete \
+        --perm.download \
+        --perm.modify \
+        --perm.rename \
+        --perm.upload \
+        --database "$DB"
+    
+    echo "Přidán: $USERNAME (heslo: $PASSWORD)"
+done
+
+# 3. Kontrola přidaných uživatelů
+filebrowser users ls --database "$DB"
+
+# Učitelé s plným přístupem
+TEACHERS=("zim" "micha" "pau")
+for teacher in "${TEACHERS[@]}"; do
+    filebrowser users add "$teacher" "Agent007" \
+        --scope "/home" \
+        --perm.admin \
+        --database "$DB"
+    echo "Přidán učitel: $teacher"
+done
