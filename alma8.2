@@ -85,3 +85,16 @@ EOF
 systemctl daemon-reload
 systemctl enable filebrowser
 systemctl start filebrowser
+
+
+
+
+
+cd /var/www/html
+wget https://raw.githubusercontent.com/prasathmani/tinyfilemanager/master/tinyfilemanager.php
+mv tinyfilemanager.php index.php
+
+systemctl enable httpd
+systemctl start httpd
+firewall-cmd --permanent --add-service=http
+firewall-cmd --reload
