@@ -236,3 +236,73 @@ done
 # Kontrola
 systemctl status vncserver-u01
 netstat -tlnp | grep :5901
+
+
+
+# Vytvoření VNC služeb pro učitele
+TEACHERS=("zim" "micha" "pau")
+
+for i in "${!TEACHERS[@]}"; do
+    teacher="${TEACHERS[$i]}"
+    port=$((21 + i))  # Porty 21, 22, 23
+    
+    cat > /etc/systemd/system/vncserver-$teacher.service << EOF
+[Unit]
+Description=Remote Desktop VNC Service for $teacher
+After=syslog.target network.target
+
+[Service]
+Type=forking
+User=$teacher
+Group=teachers
+WorkingDirectory=/home/$teacher
+ExecStartPre=/bin/sh -c '/usr/bin/vncserver -kill :$port > /dev/null 2>&1 || :'
+ExecStart=/usr/bin/vncserver :$port -geometry 1024x768 -localhost no
+ExecStop=/usr/bin/vncserver -kill :$port
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    echo "Vytvořena služba pro $teacher na portu :$port"
+done
+
+# Reload systemd
+systemctl daemon-reload
+
+# Spuštění a povolení služeb učitelů
+for teacher in "${TEACHERS[@]}"; do
+    systemctl enable vncserver-$teacher
+    systemctl start vncserver-$teacher
+    echo "Spuštěn VNC pro $teacher"
+done
+
+# Kontrola
+echo "=== Status učitelských VNC ==="
+systemctl status vncserver-zim
+systemctl status vncserver-micha  
+systemctl status vncserver-pau
+
+# Kontrola portů
+echo "=== VNC porty ==="
+netstat -tlnp | grep :59
+
+for i in $(seq 21 23); do
+    vnc_port=$((5900 + i))
+    firewall-cmd --permanent --add-port=$i/tcp
+    firewall-cmd --permanent --add-port=$vnc_port/tcp
+    firewall-cmd --permanent --add-forward-port=port=$i:proto=tcp:toport=$vnc_port
+done
+firewall-cmd --reload
+
+
+# 1. Enable služby pro automatický start
+for i in $(seq -w 1 20); do
+    systemctl enable vncserver-u$i
+    echo "Povoleno auto-start pro u$i"
+done
+
+# 2. Pro učitele (pokud máš)
+systemctl enable vncserver-zim
+systemctl enable vncserver-micha  
+systemctl enable vncserver-pau
