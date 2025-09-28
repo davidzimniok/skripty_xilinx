@@ -39,12 +39,6 @@ for i in $(seq -w 1 20); do
     
     filebrowser users add "$USERNAME" "$PASSWORD" \
         --scope "$HOMEDIR" \
-        --perm.create \
-        --perm.delete \
-        --perm.download \
-        --perm.modify \
-        --perm.rename \
-        --perm.upload \
         --database "$DB"
     
     echo "Přidán: $USERNAME (heslo: $PASSWORD)"
