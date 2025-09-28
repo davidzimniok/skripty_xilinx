@@ -1,0 +1,87 @@
+# Vytvoření konfiguračního adresáře
+mkdir -p /etc/filebrowser
+
+# Inicializace databáze
+filebrowser config init --database /etc/filebrowser/filebrowser.db
+
+# Nastavení základní konfigurace
+filebrowser config set --address 0.0.0.0 --port 8080 --database /etc/filebrowser/filebrowser.db
+filebrowser config set --root /home --database /etc/filebrowser/filebrowser.db
+
+# Vytvoření admin uživatele
+filebrowser users add admin admin123 --perm.admin --database /etc/filebrowser/filebrowser.db
+
+
+
+#!/bin/bash
+# setup-filebrowser-users.sh
+
+DB="/etc/filebrowser/filebrowser.db"
+
+echo "=== Přidávání studentů do Filebrowser ==="
+
+# Studenti u01-u20
+for i in $(seq -w 1 20); do
+    USERNAME="u$i"
+    PASSWORD="${i#0}"  # Heslo bez leading zero (1, 2, ..., 20)
+    HOMEDIR="/home/$USERNAME"
+    
+    # Přidání uživatele
+    filebrowser users add "$USERNAME" "$PASSWORD" \
+        --scope "$HOMEDIR" \
+        --perm.create \
+        --perm.delete \
+        --perm.download \
+        --perm.modify \
+        --perm.rename \
+        --perm.share \
+        --perm.upload \
+        --database "$DB"
+    
+    echo "Přidán student: $USERNAME (heslo: $PASSWORD, scope: $HOMEDIR)"
+done
+
+# Učitelé
+TEACHERS=("zim" "micha" "pau")
+for teacher in "${TEACHERS[@]}"; do
+    filebrowser users add "$teacher" "Agent007" \
+        --scope "/home" \
+        --perm.admin \
+        --perm.create \
+        --perm.delete \
+        --perm.download \
+        --perm.modify \
+        --perm.rename \
+        --perm.share \
+        --perm.upload \
+        --database "$DB"
+    
+    echo "Přidán učitel: $teacher (heslo: Agent007, scope: /home - plný přístup)"
+done
+
+echo "=== Dokončeno ==="
+echo "Webový file manager bude dostupný na: http://192.168.1.18:8080"
+
+
+
+
+cat > /etc/systemd/system/filebrowser.service << 'EOF'
+[Unit]
+Description=Filebrowser
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/filebrowser --database /etc/filebrowser/filebrowser.db
+User=root
+Group=root
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Aktivace služby
+systemctl daemon-reload
+systemctl enable filebrowser
+systemctl start filebrowser
