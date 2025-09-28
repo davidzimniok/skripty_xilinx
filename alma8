@@ -207,3 +207,32 @@ for i in $(seq 1 20); do
     vnc_port=$((5900 + i))
     firewall-cmd --permanent --add-forward-port=port=$i:proto=tcp:toport=$vnc_port
 done
+
+# Pro každého studenta vlastní service
+for i in $(seq -w 1 20); do
+    cat > /etc/systemd/system/vncserver-u$i.service << EOF
+[Unit]
+Description=Remote Desktop VNC Service for u$i
+After=syslog.target network.target
+
+[Service]
+Type=forking
+User=u$i
+Group=students
+WorkingDirectory=/home/u$i
+ExecStartPre=/bin/sh -c '/usr/bin/vncserver -kill :${i#0} > /dev/null 2>&1 || :'
+ExecStart=/usr/bin/vncserver :${i#0} -geometry 1024x768 -localhost no
+ExecStop=/usr/bin/vncserver -kill :${i#0}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Spuštění služby
+    systemctl enable vncserver-u$i
+    systemctl start vncserver-u$i
+done
+
+# Kontrola
+systemctl status vncserver-u01
+netstat -tlnp | grep :5901
