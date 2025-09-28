@@ -101,3 +101,28 @@ mv filebrowser /usr/local/bin/
 # 4. Restart služby
 systemctl restart filebrowser
 systemctl status filebrowser
+
+
+# Nový systemd service file
+cat > /etc/systemd/system/filebrowser.service << 'EOF'
+[Unit]
+Description=Filebrowser
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/filebrowser --database /etc/filebrowser/filebrowser.db --address 0.0.0.0 --port 8080 --root /home
+User=root
+Group=root
+Restart=always
+RestartSec=5
+WorkingDirectory=/etc/filebrowser
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload a restart
+systemctl daemon-reload
+systemctl restart filebrowser
+systemctl status filebrowser
