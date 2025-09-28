@@ -34,7 +34,7 @@ DB="/etc/filebrowser/filebrowser.db"
 
 for i in $(seq -w 1 20); do
     USERNAME="u$i"
-    PASSWORD="$i" 
+    PASSWORD="$i$i$i$i$i$i" 
     HOMEDIR="/home/$USERNAME"
     
     filebrowser users add "$USERNAME" "$PASSWORD" \
