@@ -203,3 +203,7 @@ systemctl restart sshd
 
 ______________________
 
+for i in $(seq 1 20); do
+    vnc_port=$((5900 + i))
+    firewall-cmd --permanent --add-forward-port=port=$i:proto=tcp:toport=$vnc_port
+done
