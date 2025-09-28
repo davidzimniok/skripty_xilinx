@@ -1,3 +1,31 @@
+# 1. Zastavit všechno
+pkill filebrowser
+
+# 2. Smazat vše a začít znovu
+rm -rf /etc/filebrowser
+mkdir -p /etc/filebrowser
+cd /etc/filebrowser
+
+# 3. Inicializace databáze
+filebrowser config init
+
+# 4. Základní konfigurace (bez --database, používá default .filebrowser.json)
+filebrowser config set --address 0.0.0.0
+filebrowser config set --port 8080
+filebrowser config set --root /home
+
+# 5. Přidat admin
+filebrowser users add admin admin123 --perm.admin
+
+# 6. Přidat studenta pro test
+filebrowser users add u01 1 --scope /home/u01
+
+# 7. Kontrola uživatelů
+filebrowser users ls
+
+# 8. Spustit
+filebrowser &
+
 # 1. Nejdřív zkontroluj že filebrowser běží
 ps aux | grep filebrowser
 
