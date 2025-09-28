@@ -89,12 +89,15 @@ systemctl start filebrowser
 
 
 
+cd /tmp
+wget https://github.com/filebrowser/filebrowser/releases/latest/download/linux-amd64-filebrowser.tar.gz
+tar -xzf linux-amd64-filebrowser.tar.gz
+chmod +x filebrowser
+mv filebrowser /usr/local/bin/
 
-cd /var/www/html
-wget https://raw.githubusercontent.com/prasathmani/tinyfilemanager/master/tinyfilemanager.php
-mv tinyfilemanager.php index.php
+# 3. Test
+/usr/local/bin/filebrowser version
 
-systemctl enable httpd
-systemctl start httpd
-firewall-cmd --permanent --add-service=http
-firewall-cmd --reload
+# 4. Restart služby
+systemctl restart filebrowser
+systemctl status filebrowser
