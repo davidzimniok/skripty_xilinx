@@ -1,26 +1,40 @@
-./filebrowser config init
-
-vim ~/.filebrowser/filebrowser.json
-
-Nastav "auth.method": "pam"
-Volitelně nastav "root": "/home"
-
-./filebrowser -r /home -a 0.0.0.0 -p 8080
+dnf install -y httpd mariadb-server mariadb php php-gd php-curl php-xml php-mbstring php-zip php-intl unzip wget curl git
+systemctl enable --now httpd
+systemctl enable --now mariadb
 
 
 
-[Unit]
-Description=FileBrowser PAM Web File Manager
-After=network.target
+mysql_secure_installation
+CREATE DATABASE nextcloud;
+CREATE USER 'ncuser'@'localhost' IDENTIFIED BY 'TvojeHeslo123';
+GRANT ALL PRIVILEGES ON nextcloud.* TO 'ncuser'@'localhost';
+FLUSH PRIVILEGES;
 
-[Service]
-ExecStart=/path/to/filebrowser -r /home -a 0.0.0.0 -p 8080
-User=root
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
+cd /var/www/
+wget https://download.nextcloud.com/server/releases/nextcloud-26.0.0.zip
+unzip nextcloud-26.0.0.zip
+chown -R apache:apache nextcloud
+chmod -R 755 nextcloud
 
 
-Pak sudo systemctl daemon-reload + sudo systemctl enable --now filebrowser
+vim /etc/httpd/conf.d/nextcloud.conf
+
+
+
+<VirtualHost *:80>
+    DocumentRoot /var/www/
+    ServerName xilinx.local
+
+    <Directory /var/www/nextcloud/>
+        Options +FollowSymlinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog /var/log/httpd/nextcloud_error.log
+    CustomLog /var/log/httpd/nextcloud_access.log combined
+</VirtualHost>
+
+dnf install -y mod_ssl
+systemctl restart httpd
 
