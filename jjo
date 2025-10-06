@@ -1,1 +1,23 @@
-sudo ldapadd -x -D "cn=admin,dc=example,dc=com" -W -f vsechny_ucty.ldif
+sudo dnf install httpd
+sudo a2enmod userdir       # na Debianu, na Fedorě je většinou povoleno defaultně
+sudo systemctl restart httpd
+
+
+/etc/httpd/conf.d/userdir.conf
+
+<IfModule mod_userdir.c>
+    UserDir public_html
+    UserDir enabled p01 p02 micha zim pau han hor
+    <Directory /home/*/public_html>
+        AllowOverride None
+        Options Indexes FollowSymLinks
+        Require all granted
+    </Directory>
+</IfModule>
+
+
+mkdir -p /home/p01/public_html
+chmod 755 /home/p01/public_html
+chown p01:p01 /home/p01/public_html
+ln -s /home/p01/public_html /home/p01/Desktop/Share
+
