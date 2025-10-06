@@ -1,11 +1,38 @@
+1️⃣ Překompilovat FileBrowser s PAM podporou
+Nainstalovat Go a nástroje:
+sudo dnf install golang git make
+Stáhnout zdroj:
+git clone https://github.com/filebrowser/filebrowser.git
+cd filebrowser
+Překompilovat s PAM podporou:
+go build -tags pam
+Vytvoří se binárka filebrowser s PAM autentizací.
+2️⃣ Nastavení PAM autentizace
+Inicializace configu:
+./filebrowser config init
+Otevři filebrowser.json:
+nano ~/.filebrowser/filebrowser.json
+Nastav "auth.method": "pam"
+Volitelně nastav "root": "/home"
+Spustit službu s novou binárkou:
+./filebrowser -r /home -a 0.0.0.0 -p 8080
+Nyní studenti a učitelé používají stejné UNIX/X2Go heslo.
+3️⃣ Doporučení pro systemd službu
+Po překompilování:
 [Unit]
-Description=FileBrowser Web File Manager
+Description=FileBrowser PAM Web File Manager
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/filebrowser -r /home -a 0.0.0.0 -p 8080
+ExecStart=/path/to/filebrowser -r /home -a 0.0.0.0 -p 8080
 User=root
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
+Pak sudo systemctl daemon-reload + sudo systemctl enable --now filebrowser
+✅ Výsledek:
+Studenti/učitelé se přihlásí webem do FileBrowser i X2Go stejným heslem.
+Kvóty XFS fungují stále pro jejich domácí adresáře.
+Admin účet je stále k dispozici pro správu, ale běžní uživatelé používají UNIX účty.
+Chceš, abych ti připravil přesný krok-za-krokem návod pro Fedora server, jak FileBrowser překompilovat a nastavit jako službu s PAM?
