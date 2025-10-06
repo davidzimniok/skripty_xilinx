@@ -1,9 +1,1 @@
-sudo ldapmodify -Y EXTERNAL -H ldapi:/// <<EOF
-dn: olcDatabase={2}mdb,cn=config
-changetype: modify
-replace: olcRootDN
-olcRootDN: cn=admin,dc=example,dc=com
--
-replace: olcRootPW
-olcRootPW: $(slappasswd)
-EOF
+sudo ldapadd -x -D "cn=admin,dc=example,dc=com" -W -f vsechny_ucty.ldif
