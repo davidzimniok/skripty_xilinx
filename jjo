@@ -1,0 +1,31 @@
+#!/bin/bash
+
+MOUNT=/home
+
+for i in $(seq -w 1 25); do
+  USER="p${i}"
+  if id "$USER" &>/dev/null; then
+    sudo xfs_quota -x -c "limit -u bsoft=4g bhard=4.5g $USER" $MOUNT
+    echo "Kvota nastavena pro $USER: soft=4G hard=4.5G"
+  else
+    echo "Uzivatel $USER neexistuje, preskoceno"
+  fi
+done
+
+declare -A UCITELE
+UCITELE=( ["micha"]="Michalek" ["zim"]="ZimniokZimniok" ["pau"]="Pauckova" ["han"]="HankeHanke" ["hor"]="HorakHorak" )
+
+sudo groupadd -f ucitele
+
+for USER in "${!UCITELE[@]}"; do
+  PASS="${UCITELE[$USER]}"
+  if id "$USER" &>/dev/null; then
+  else
+    sudo useradd -m -s /bin/bash -g ucitele "$USER"
+    echo "$USER:$PASS" | sudo chpasswd
+    sudo passwd -e "$USER"
+  fi
+  sudo xfs_quota -x -c "limit -u bsoft=6g bhard=6.5g $USER" $MOUNT
+done
+
+sudo xfs_quota -x -c "report -h" $MOUNT
