@@ -1,23 +1,11 @@
-#!/bin/bash
+[Unit]
+Description=FileBrowser Web File Manager
+After=network.target
 
-MOUNT=/home
+[Service]
+ExecStart=/usr/local/bin/filebrowser -r /home -a 0.0.0.0 -p 8080
+User=root
+Restart=on-failure
 
-for i in $(seq -w 1 25); do
-  USER="p${i}"
-  sudo xfs_quota -x -c "limit -u bsoft=4g bhard=4608M $USER" $MOUNT
-done
-
-declare -A UCITELE
-UCITELE=( ["micha"]="Michalek" ["zim"]="ZimniokZimniok" ["pau"]="Pauckova" ["han"]="HankeHanke" ["hor"]="HorakHorak" )
-
-sudo groupadd -f ucitele
-
-for USER in "${!UCITELE[@]}"; do
-  PASS="${UCITELE[$USER]}"
-  sudo useradd -m -s /bin/bash -g ucitele "$USER"
-  echo "$USER:$PASS" | sudo chpasswd
-  sudo passwd -e "$USER"
-  sudo xfs_quota -x -c "limit -u bsoft=6g bhard=6656M $USER" $MOUNT
-done
-
-sudo xfs_quota -x -c "report -h" $MOUNT
+[Install]
+WantedBy=multi-user.target
