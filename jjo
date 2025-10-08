@@ -1,5 +1,6 @@
-sudo useradd -m -s /bin/bash "$USER"
-        echo "$USER:$PASSWORD" | sudo chpasswd
-        
-        # Force password change on first login
-        sudo chage -d 0 "$USER"
+PASSWORD="${i}${i}${i}${i}"  # p01 -> 01010101, p02 -> 02020202
+
+echo "$UZIVATEL:$PASSWORD" | sudo chpasswd
+
+sudo useradd -m -s /bin/bash "$UZIVATEL"
+        echo "$UZIVATEL:$PASSWORD" | sudo chpasswd
