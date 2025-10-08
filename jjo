@@ -1,23 +1,105 @@
-sudo dnf install httpd
-sudo a2enmod userdir       # na Debianu, na Fedorě je většinou povoleno defaultně
-sudo systemctl restart httpd
+#!/bin/bash
+# Complete user account management - batch creation
 
+MOUNT=/home
 
-/etc/httpd/conf.d/userdir.conf
+# ==================== STUDENTS ====================
+echo "=== Processing students p01-p25 ==="
 
-<IfModule mod_userdir.c>
-    UserDir public_html
-    UserDir enabled p01 p02 micha zim pau han hor
-    <Directory /home/*/public_html>
-        AllowOverride None
-        Options Indexes FollowSymLinks
-        Require all granted
-    </Directory>
-</IfModule>
+for i in $(seq -w 1 25); do
+    UZIVATEL="p${i}"
+    SKUPINA="studenti"
+    SOFT_QUOTA=4194304  # 4GB
+    HARD_QUOTA=4718592  # 4.5GB
+    
+    # Create group if it doesn't exist
+    sudo groupadd -f "$SKUPINA"
+    
+    # Check if user exists
+    if id "$UZIVATEL" &>/dev/null; then
+        echo "[$UZIVATEL] Exists - updating groups and quotas"
+        # Explicitly reassign to correct group
+        sudo usermod -g "$SKUPINA" -G "$SKUPINA" "$UZIVATEL"
+        # Update quotas
+        sudo setquota -u "$UZIVATEL" $SOFT_QUOTA $HARD_QUOTA 0 0 $MOUNT
+    else
+        echo "[$UZIVATEL] Creating new user"
+        # Create account
+        sudo adduser "$UZIVATEL"
+        
+        # Assign to group
+        sudo usermod -g "$SKUPINA" "$UZIVATEL"
+        
+        # Create directory structure (your routine)
+        sudo mkdir -p $MOUNT/$UZIVATEL/public_html
+        sudo chmod 755 $MOUNT/$UZIVATEL/public_html
+        sudo chown $UZIVATEL:$SKUPINA $MOUNT/$UZIVATEL/public_html
+        sudo ln -s $MOUNT/$UZIVATEL/public_html $MOUNT/$UZIVATEL/Desktop/Share
+        sudo chmod +r+x $MOUNT/$UZIVATEL
+        
+        # Set quotas
+        sudo setquota -u "$UZIVATEL" $SOFT_QUOTA $HARD_QUOTA 0 0 $MOUNT
+    fi
+done
 
+# ==================== TEACHERS ====================
+echo ""
+echo "=== Processing teachers ==="
 
-mkdir -p /home/p01/public_html
-chmod 755 /home/p01/public_html
-chown p01:p01 /home/p01/public_html
-ln -s /home/p01/public_html /home/p01/Desktop/Share
+# Associative array with teachers
+declare -A UCITELE
+UCITELE=(["micha"]="Michalek" ["zim"]="ZimniokZimniok" ["pau"]="Pauckova" ["han"]="HankeHanke" ["hor"]="HorakHorak")
 
+SKUPINA="ucitele"
+SOFT_QUOTA=6291456  # 6GB
+HARD_QUOTA=6815744  # 6.5GB
+
+# Create group
+sudo groupadd -f "$SKUPINA"
+
+echo ""
+echo "=== DEFAULT PASSWORDS FOR TEACHERS ==="
+for USER in "${!UCITELE[@]}"; do
+    HESLO="${UCITELE[$USER]}"
+    
+    # Check if user exists
+    if id "$USER" &>/dev/null; then
+        echo "[$USER] Exists - updating ONLY groups and quotas (keeping password)"
+        # Explicitly reassign to correct group
+        sudo usermod -g "$SKUPINA" -G "$SKUPINA" "$USER"
+        # Update quotas
+        sudo setquota -u "$USER" $SOFT_QUOTA $HARD_QUOTA 0 0 $MOUNT
+    else
+        echo "[$USER] Creating new teacher - password: $HESLO"
+        
+        # Create account with temporary password
+        sudo adduser --disabled-password --gecos "" "$USER"
+        echo "$USER:$HESLO" | sudo chpasswd
+        
+        # Force password change on first login
+        sudo chage -d 0 "$USER"
+        
+        # Assign to group
+        sudo usermod -g "$SKUPINA" "$USER"
+        
+        # Create directory structure
+        sudo mkdir -p $MOUNT/$USER/public_html
+        sudo chmod 755 $MOUNT/$USER/public_html
+        sudo chown $USER:$SKUPINA $MOUNT/$USER/public_html
+        sudo ln -s $MOUNT/$USER/public_html $MOUNT/$USER/Desktop/Share
+        sudo chmod +r+x $MOUNT/$USER
+        
+        # Set quotas
+        sudo setquota -u "$USER" $SOFT_QUOTA $HARD_QUOTA 0 0 $MOUNT
+    fi
+done
+
+echo ""
+echo "=== COMPLETE ==="
+echo "Students: p01-p25 in group 'studenti' with quota 4GB/4.5GB"
+echo "Teachers: ${!UCITELE[@]} in group 'ucitele' with quota 6GB/6.5GB"
+echo ""
+echo "Default passwords for teachers (ONLY for newly created accounts):"
+for USER in "${!UCITELE[@]}"; do
+    echo "  $USER: ${UCITELE[$USER]}"
+done
