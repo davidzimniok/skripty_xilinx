@@ -1,6 +1,1 @@
-PASSWORD="${i}${i}${i}${i}"  # p01 -> 01010101, p02 -> 02020202
-
-echo "$UZIVATEL:$PASSWORD" | sudo chpasswd
-
-sudo useradd -m -s /bin/bash "$UZIVATEL"
-        echo "$UZIVATEL:$PASSWORD" | sudo chpasswd
+for i in $(seq -w 26 40); do sudo userdel -r p${i}; done
