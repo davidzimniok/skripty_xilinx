@@ -1,3 +1,8 @@
-export CC=/opt/gcc-9/bin/gcc
-export CXX=/opt/gcc-9/bin/g++
-export LD_LIBRARY_PATH=/opt/gcc-9/lib64:$LD_LIBRARY_PATH
+sudo mv /usr/bin/gcc /usr/bin/gcc.bak
+sudo mv /usr/bin/g++ /usr/bin/g++.bak
+
+sudo ln -s /opt/gcc-9/bin/gcc /usr/bin/gcc
+sudo ln -s /opt/gcc-9/bin/g++ /usr/bin/g++
+
+gcc --version
+g++ --version
