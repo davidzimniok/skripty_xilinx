@@ -1,1 +1,7 @@
 make -j$(nproc) 2>&1 | tee gcc9_build.log
+
+cd /tmp/gcc-9.5.0
+make distclean
+./configure --prefix=/opt/gcc-9 --disable-libsanitizer --enable-languages=c,c++,fortran
+make -j$(nproc)
+make install
