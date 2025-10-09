@@ -1,1 +1,1 @@
-sudo dnf install libgmp-devel libmpfr-devel libmpc-devel zlib-devel texinfo flex bison
+make -j$(nproc) 2>&1 | tee gcc9_build.log
