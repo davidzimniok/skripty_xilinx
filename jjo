@@ -1,7 +1,1 @@
-sudo dnf install gcc gcc-c++ make gmp-devel mpfr-devel libmpc-devel flex bison
-wget https://ftp.gnu.org/gnu/gcc/gcc-9.5.0/gcc-9.5.0.tar.xz
-tar -xf gcc-9.5.0.tar.xz
-cd gcc-9.5.0
-./configure --prefix=/opt/gcc-9 --disable-multilib --enable-languages=c,c++
-make -j$(nproc)
-sudo make install
+sudo dnf install libgmp-devel libmpfr-devel libmpc-devel zlib-devel texinfo flex bison
