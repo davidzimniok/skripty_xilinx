@@ -1,7 +1,2 @@
-make -j$(nproc) 2>&1 | tee gcc9_build.log
-
-cd /tmp/gcc-9.5.0
-make distclean
-./configure --prefix=/opt/gcc-9 --disable-libsanitizer --enable-languages=c,c++,fortran
-make -j$(nproc)
-make install
+export PATH=/opt/gcc-9/bin:$PATH
+export LD_LIBRARY_PATH=/opt/gcc-9/lib64:$LD_LIBRARY_PATH
