@@ -1,13 +1,9 @@
-# 1. Zkompilujte GCC-9 (jednou, pro celý systém)
-cd /tmp
-wget https://ftp.gnu.org/gnu/gcc/gcc-9.5.0/gcc-9.5.0.tar.gz
-tar xf gcc-9.5.0.tar.gz
-cd gcc-9.5.0
-./contrib/download_prerequisites
-mkdir build && cd build
-../configure --prefix=/opt/gcc-9 --enable-languages=c,c++ --disable-multilib --disable-bootstrap
-make -j$(nproc)  # ~30-60 minut
-sudo make install
+cd /opt
+sudo wget https://ftp.gnu.org/gnu/gcc/gcc-9.5.0/gcc-9.5.0.tar.xz
+sudo tar xf gcc-9.5.0.tar.xz
+
+# Nebo použijte binární distribuci (pokud existuje pro x86_64)
+# Alternativně - použijte starší Fedora container
 
 
 # 2. Vytvořte wrapper pro ISE v /usr/local/bin
