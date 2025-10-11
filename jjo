@@ -1,31 +1,5 @@
-#!/bin/bash
-MOUNT=/home
-
-# ==================== STUDENTS ====================
-echo "=== Processing students p01-p25 ==="
-
-# Vyprázdnit/vytvořit vncserver.users soubor
-sudo truncate -s 0 /etc/tigervnc/vncserver.users
-
-for i in $(seq -w 1 25); do
-    USER="p${i}"
-    GROUP="STUDENTS"
-    PASSWORD="${i}${i}${i}${i}"
-    
-    # Namapovat port pro uživatele
-    echo ":$((10#$i))=$USER" | sudo tee -a /etc/tigervnc/vncserver.users
-    
-    sudo mkdir -p $MOUNT/$USER/.vnc/
-    sudo chmod 755 $MOUNT/$USER/.vnc/
-    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/
-    sudo cp $MOUNT/klient/.vnc/config $MOUNT/$USER/.vnc/config
-    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/config
-    sudo chmod +r+x $MOUNT/$USER
-    
-    # Nastavit heslo pro VNC
-    echo $PASSWORD | sudo -u $USER vncpasswd -f > $MOUNT/$USER/.vnc/passwd
-    sudo chmod 600 $MOUNT/$USER/.vnc/passwd
-    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/passwd
+for i in $(seq 1 25); do
+    echo "Starting VNC for p0$i on port :$i"
+    sudo systemctl enable vncserver@:$i.service
+    sudo systemctl start vncserver@:$i.service
 done
-
-echo "=== Done! ==="
