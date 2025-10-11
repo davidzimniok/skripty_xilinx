@@ -1,5 +1,60 @@
-for i in $(seq 1 25); do
-    echo "Starting VNC for p0$i on port :$i"
-    sudo systemctl enable vncserver@:$i.service
-    sudo systemctl start vncserver@:$i.service
+#!/bin/bash
+MOUNT=/home
+
+# ==================== TEACHERS ====================
+echo "=== Processing teachers ==="
+
+# Associative array with teachers
+declare -A TEACHERS
+TEACHERS=(["micha"]="Michalek" ["hrn"]="HrnciarHrnciar" ["zim"]="ZimniokZimniok" ["pau"]="Pauckova" ["han"]="HankeHanke" ["hor"]="HorakHorak")
+
+GROUP="TEACHERS"
+
+# Counter for ports starting from 60
+PORT=61
+
+for USER in "${!TEACHERS[@]}"; do
+    PASSWORD="$USER"  # heslo je stejné jako username (micha, hrn, zim...)
+    
+    echo "Processing $USER (${TEACHERS[$USER]}) on port :$PORT"
+    
+    # Namapovat port pro uživatele
+    echo ":$PORT=$USER" | sudo tee -a /etc/tigervnc/vncserver.users
+    
+    sudo mkdir -p $MOUNT/$USER/.vnc/
+    sudo chmod 755 $MOUNT/$USER/.vnc/
+    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/
+    sudo cp $MOUNT/klient/.vnc/config $MOUNT/$USER/.vnc/config
+    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/config
+    sudo chmod +r+x $MOUNT/$USER
+    
+    # Nastavit heslo pro VNC
+    echo $PASSWORD | sudo -u $USER vncpasswd -f > $MOUNT/$USER/.vnc/passwd
+    sudo chmod 600 $MOUNT/$USER/.vnc/passwd
+    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/passwd
+    
+    ((PORT++))
 done
+
+# ==================== KLIENT ====================
+echo "=== Processing klient ==="
+
+USER="klient"
+GROUP="STUDENTS"
+PASSWORD="klient"
+
+# Namapovat port pro klienta
+echo ":86=$USER" | sudo tee -a /etc/tigervnc/vncserver.users
+
+sudo mkdir -p $MOUNT/$USER/.vnc/
+sudo chmod 755 $MOUNT/$USER/.vnc/
+sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/
+sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/config
+sudo chmod +r+x $MOUNT/$USER
+
+# Nastavit heslo pro VNC
+echo $PASSWORD | sudo -u $USER vncpasswd -f > $MOUNT/$USER/.vnc/passwd
+sudo chmod 600 $MOUNT/$USER/.vnc/passwd
+sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/passwd
+
+echo "=== Done! ==="
