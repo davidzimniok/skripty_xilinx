@@ -1,60 +1,52 @@
-#!/bin/bash
-MOUNT=/home
+for i in $(seq -w 1 25); do
+    USER="p${i}"
+    
+    echo "Disabling screensaver for $USER"
+    
+    sudo mkdir -p /home/$USER/.config/lxsession/LXDE/
+    
+    sudo -u $USER bash -c "cat > /home/$USER/.config/lxsession/LXDE/desktop.conf << 'EOF'
+[Session]
+screensaver/mode=0
+screensaver/lock_delay=0
+EOF"
+    
+    sudo chown -R $USER:STUDENTS /home/$USER/.config/
+done
 
-# ==================== TEACHERS ====================
-echo "=== Processing teachers ==="
+for i in $(seq -w 1 25); do
+    USER="q${i}"
+    
+    echo "Disabling screensaver for $USER"
+    
+    sudo mkdir -p /home/$USER/.config/lxsession/LXDE/
+    
+    sudo -u $USER bash -c "cat > /home/$USER/.config/lxsession/LXDE/desktop.conf << 'EOF'
+[Session]
+screensaver/mode=0
+screensaver/lock_delay=0
+EOF"
+    
+    sudo chown -R $USER:STUDENTS /home/$USER/.config/
+done
+
+
 
 # Associative array with teachers
 declare -A TEACHERS
 TEACHERS=(["micha"]="Michalek" ["hrn"]="HrnciarHrnciar" ["zim"]="ZimniokZimniok" ["pau"]="Pauckova" ["han"]="HankeHanke" ["hor"]="HorakHorak")
 
-GROUP="TEACHERS"
-
-# Counter for ports starting from 60
-PORT=61
-
 for USER in "${!TEACHERS[@]}"; do
-    PASSWORD="$USER"  # heslo je stejné jako username (micha, hrn, zim...)
     
-    echo "Processing $USER (${TEACHERS[$USER]}) on port :$PORT"
+    echo "Disabling screensaver for $USER"
     
-    # Namapovat port pro uživatele
-    echo ":$PORT=$USER" | sudo tee -a /etc/tigervnc/vncserver.users
+    sudo mkdir -p /home/$USER/.config/lxsession/LXDE/
     
-    sudo mkdir -p $MOUNT/$USER/.vnc/
-    sudo chmod 755 $MOUNT/$USER/.vnc/
-    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/
-    sudo cp $MOUNT/klient/.vnc/config $MOUNT/$USER/.vnc/config
-    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/config
-    sudo chmod +r+x $MOUNT/$USER
+    sudo -u $USER bash -c "cat > /home/$USER/.config/lxsession/LXDE/desktop.conf << 'EOF'
+[Session]
+screensaver/mode=0
+screensaver/lock_delay=0
+EOF"
     
-    # Nastavit heslo pro VNC
-    echo $PASSWORD | sudo -u $USER vncpasswd -f > $MOUNT/$USER/.vnc/passwd
-    sudo chmod 600 $MOUNT/$USER/.vnc/passwd
-    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/passwd
-    
-    ((PORT++))
+    sudo chown -R $USER:STUDENTS /home/$USER/.config/
 done
-
-# ==================== KLIENT ====================
-echo "=== Processing klient ==="
-
-USER="klient"
-GROUP="STUDENTS"
-PASSWORD="klient"
-
-# Namapovat port pro klienta
-echo ":86=$USER" | sudo tee -a /etc/tigervnc/vncserver.users
-
-sudo mkdir -p $MOUNT/$USER/.vnc/
-sudo chmod 755 $MOUNT/$USER/.vnc/
-sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/
-sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/config
-sudo chmod +r+x $MOUNT/$USER
-
-# Nastavit heslo pro VNC
-echo $PASSWORD | sudo -u $USER vncpasswd -f > $MOUNT/$USER/.vnc/passwd
-sudo chmod 600 $MOUNT/$USER/.vnc/passwd
-sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/passwd
-
-echo "=== Done! ==="
