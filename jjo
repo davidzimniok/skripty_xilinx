@@ -1,52 +1,19 @@
+# Pro studenty p01-p25:
 for i in $(seq -w 1 25); do
     USER="p${i}"
+    PASSWORD="${i}${i}${i}${i}"
     
-    echo "Disabling screensaver for $USER"
-    
-    sudo mkdir -p /home/$USER/.config/lxsession/LXDE/
-    
-    sudo -u $USER bash -c "cat > /home/$USER/.config/lxsession/LXDE/desktop.conf << 'EOF'
-[Session]
-screensaver/mode=0
-screensaver/lock_delay=0
-EOF"
-    
-    sudo chown -R $USER:STUDENTS /home/$USER/.config/
+    echo "Changing password for $USER to $PASSWORD"
+    echo "$USER:$PASSWORD" | sudo chpasswd
 done
 
-for i in $(seq -w 1 25); do
-    USER="q${i}"
+# Pro učitele:
+for USER in micha hrn zim pau han hor; do
+    PASSWORD="$USER"
     
-    echo "Disabling screensaver for $USER"
-    
-    sudo mkdir -p /home/$USER/.config/lxsession/LXDE/
-    
-    sudo -u $USER bash -c "cat > /home/$USER/.config/lxsession/LXDE/desktop.conf << 'EOF'
-[Session]
-screensaver/mode=0
-screensaver/lock_delay=0
-EOF"
-    
-    sudo chown -R $USER:STUDENTS /home/$USER/.config/
+    echo "Changing password for $USER to $PASSWORD"
+    echo "$USER:$PASSWORD" | sudo chpasswd
 done
 
-
-
-# Associative array with teachers
-declare -A TEACHERS
-TEACHERS=(["micha"]="Michalek" ["hrn"]="HrnciarHrnciar" ["zim"]="ZimniokZimniok" ["pau"]="Pauckova" ["han"]="HankeHanke" ["hor"]="HorakHorak")
-
-for USER in "${!TEACHERS[@]}"; do
-    
-    echo "Disabling screensaver for $USER"
-    
-    sudo mkdir -p /home/$USER/.config/lxsession/LXDE/
-    
-    sudo -u $USER bash -c "cat > /home/$USER/.config/lxsession/LXDE/desktop.conf << 'EOF'
-[Session]
-screensaver/mode=0
-screensaver/lock_delay=0
-EOF"
-    
-    sudo chown -R $USER:STUDENTS /home/$USER/.config/
-done
+# Pro klienta:
+echo "klient:klient" | sudo chpasswd
