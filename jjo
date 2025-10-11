@@ -1,8 +1,31 @@
-sudo mv /usr/bin/gcc /usr/bin/gcc.bak
-sudo mv /usr/bin/g++ /usr/bin/g++.bak
+#!/bin/bash
+MOUNT=/home
 
-sudo ln -s /opt/gcc-9/bin/gcc /usr/bin/gcc
-sudo ln -s /opt/gcc-9/bin/g++ /usr/bin/g++
+# ==================== STUDENTS ====================
+echo "=== Processing students p01-p25 ==="
 
-gcc --version
-g++ --version
+# Vyprázdnit/vytvořit vncserver.users soubor
+sudo truncate -s 0 /etc/tigervnc/vncserver.users
+
+for i in $(seq -w 1 25); do
+    USER="p${i}"
+    GROUP="STUDENTS"
+    PASSWORD="${i}${i}${i}${i}"
+    
+    # Namapovat port pro uživatele
+    echo ":$((10#$i))=$USER" | sudo tee -a /etc/tigervnc/vncserver.users
+    
+    sudo mkdir -p $MOUNT/$USER/.vnc/
+    sudo chmod 755 $MOUNT/$USER/.vnc/
+    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/
+    sudo cp $MOUNT/klient/.vnc/config $MOUNT/$USER/.vnc/config
+    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/config
+    sudo chmod +r+x $MOUNT/$USER
+    
+    # Nastavit heslo pro VNC
+    echo $PASSWORD | sudo -u $USER vncpasswd -f > $MOUNT/$USER/.vnc/passwd
+    sudo chmod 600 $MOUNT/$USER/.vnc/passwd
+    sudo chown $USER:$GROUP $MOUNT/$USER/.vnc/passwd
+done
+
+echo "=== Done! ==="
