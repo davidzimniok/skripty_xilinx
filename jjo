@@ -1,19 +1,130 @@
-# Pro studenty p01-p25:
-for i in $(seq -w 1 25); do
-    USER="p${i}"
-    PASSWORD="${i}${i}${i}${i}"
+#!/bin/bash
+# VNC On-Demand Setup Script - správné porty
+
+set -e
+
+echo "=== VNC On-Demand Setup ==="
+
+# 1. Vytvoř systemd user units
+echo "Creating systemd user units..."
+
+mkdir -p /etc/systemd/user
+
+cat > /etc/systemd/user/vncserver@.socket << 'EOF'
+[Unit]
+Description=VNC Server Socket for display %i
+
+[Socket]
+ListenStream=590%i
+Accept=no
+
+[Install]
+WantedBy=sockets.target
+EOF
+
+cat > /etc/systemd/user/vncserver@.service << 'EOF'
+[Unit]
+Description=VNC Server for display %i
+After=network.target
+
+[Service]
+Type=forking
+ExecStartPre=/bin/sh -c '/usr/bin/vncserver -kill :%i > /dev/null 2>&1 || :'
+ExecStart=/usr/bin/vncserver :%i -geometry 1280x720 -depth 16 -localhost no -IdleTimeout 600
+ExecStop=/usr/bin/vncserver -kill :%i
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl daemon-reload
+
+# 2. Zastav všechny běžící VNC servery
+echo "Stopping all running VNC servers..."
+killall Xvnc 2>/dev/null || true
+sleep 2
+
+# 3. Nastav socket activation - skupina P (display :1-:25)
+echo "Setting up P group (p01-p25, displays :1-:25)..."
+for i in {1..25}; do
+    user=$(printf "p%02d" $i)
+    display=$i
     
-    echo "Changing password for $USER to $PASSWORD"
-    echo "$USER:$PASSWORD" | sudo chpasswd
+    if id "$user" &>/dev/null; then
+        echo "Setting up VNC for $user on display :$display (port 59$(printf "%02d" $display))"
+        USER_UID=$(id -u "$user")
+        
+        loginctl enable-linger "$user" 2>/dev/null || true
+        
+        sudo -u "$user" XDG_RUNTIME_DIR=/run/user/$USER_UID systemctl --user enable vncserver@$display.socket 2>/dev/null || true
+        sudo -u "$user" XDG_RUNTIME_DIR=/run/user/$USER_UID systemctl --user start vncserver@$display.socket 2>/dev/null || true
+    else
+        echo "Warning: User $user does not exist, skipping..."
+    fi
 done
 
-# Pro učitele:
-for USER in micha hrn zim pau han hor; do
-    PASSWORD="$USER"
+# 4. Nastav socket activation - skupina Q (display :31-:55)
+echo "Setting up Q group (q01-q25, displays :31-:55)..."
+for i in {1..25}; do
+    user=$(printf "q%02d" $i)
+    display=$((30 + i))
     
-    echo "Changing password for $USER to $PASSWORD"
-    echo "$USER:$PASSWORD" | sudo chpasswd
+    if id "$user" &>/dev/null; then
+        echo "Setting up VNC for $user on display :$display (port 59$display)"
+        USER_UID=$(id -u "$user")
+        
+        loginctl enable-linger "$user" 2>/dev/null || true
+        
+        sudo -u "$user" XDG_RUNTIME_DIR=/run/user/$USER_UID systemctl --user enable vncserver@$display.socket 2>/dev/null || true
+        sudo -u "$user" XDG_RUNTIME_DIR=/run/user/$USER_UID systemctl --user start vncserver@$display.socket 2>/dev/null || true
+    else
+        echo "Warning: User $user does not exist, skipping..."
+    fi
 done
 
-# Pro klienta:
-echo "klient:klient" | sudo chpasswd
+# 5. Nastav socket activation - učitelé
+echo "Setting up teachers..."
+declare -A TEACHERS=(
+    ["pau"]=61
+    ["hor"]=62
+    ["micha"]=63
+    ["hrn"]=64
+    ["zim"]=65
+    ["han"]=66
+)
+
+for user in "${!TEACHERS[@]}"; do
+    display=${TEACHERS[$user]}
+    
+    if id "$user" &>/dev/null; then
+        echo "Setting up VNC for $user on display :$display (port 59$display)"
+        USER_UID=$(id -u "$user")
+        
+        loginctl enable-linger "$user" 2>/dev/null || true
+        
+        sudo -u "$user" XDG_RUNTIME_DIR=/run/user/$USER_UID systemctl --user enable vncserver@$display.socket 2>/dev/null || true
+        sudo -u "$user" XDG_RUNTIME_DIR=/run/user/$USER_UID systemctl --user start vncserver@$display.socket 2>/dev/null || true
+    else
+        echo "Warning: User $user does not exist, skipping..."
+    fi
+done
+
+echo ""
+echo "=== Setup Complete! ==="
+echo ""
+echo "VNC servers will now start on-demand when users connect."
+echo "Idle timeout: 10 minutes"
+echo ""
+echo "Port mapping:"
+echo "  p01-p25: ports 5901-5925 (displays :1-:25)"
+echo "  q01-q25: ports 5931-5955 (displays :31-:55)"
+echo "  Teachers: ports 5961-5966 (displays :61-:66)"
+echo ""
+echo "Check status for a user:"
+echo "  sudo -u p01 systemctl --user status vncserver@1.socket"
+echo "  sudo -u q01 systemctl --user status vncserver@31.socket"
+echo "  sudo -u pau systemctl --user status vncserver@61.socket"
+echo ""
+echo "Current CPU usage:"
+top -b -n 1 | head -20
