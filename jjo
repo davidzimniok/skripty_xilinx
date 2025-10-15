@@ -2,20 +2,19 @@
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 
+# --- Start D-Bus session (musí být první) ---
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval "$(dbus-launch --sh-syntax --exit-with-session)"
+fi
+
 # --- Nastavení input method ---
 export GTK_IM_MODULE=ibus
 export QT_IM_MODULE=ibus
-export XMODIFIERS=@im=ibus
+export QT4_IM_MODULE=ibus
+export XMODIFIERS="@im=ibus"
 
-# --- Spustit ibus, pokud neběží ---
-if ! pgrep -u "$USER" -x ibus-daemon >/dev/null 2>&1; then
-    nohup ibus-daemon --daemonize --xim >/dev/null 2>&1 &
-fi
+# --- Spustit ibus-daemon ---
+nohup ibus-daemon -drx --xim >/dev/null 2>&1 &
 
-# --- Spustit dbus session ---
-if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-    eval `dbus-launch --sh-syntax --exit-with-session`
-fi
-
-# --- Spustit LXDE ---
-exec startlxde
+# --- Spustit LXDE desktop ---
+exec /usr/bin/startlxde
