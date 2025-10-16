@@ -1,20 +1,164 @@
+#!/bin/bash
+# setup_vnc_school_el7.sh
+# TigerVNC on-demand multiuser environment for science14 / education lab
+set -euo pipefail
+
+# ------------------- KONFIGURACE -------------------
+USER_PREFIX_P="p"
+USER_PREFIX_Q="q"
+P_START=1
+P_COUNT=25
+Q_START=1
+Q_COUNT=25
+
+PORT_BASE_P=5900    # 5901..5925
+PORT_BASE_Q=5930    # 5931..5955
+TEACHERS_START_PORT=5961
+
+# Učitelé
+WHEEL_TEACHERS=(zim micha hrn)
+NORMAL_TEACHERS=(pau hor han)
+
+# VNC sezení parametry
+GEOMETRY="1920x1080"
+DEPTH="24"
+
+# Idle timeout (minuty)
+IDLE_TIMEOUT_MIN=25
+IDLE_TIMEOUT_SEC=$((IDLE_TIMEOUT_MIN*60))
+
+# Firewall
+FIREWALL_PORT_RANGES="5901-5925 5931-5955 5961-5970"
+
+# ----------------------------------------------------
+
+echo ">>> Instalace balíků..."
+yum -y update
+yum -y install epel-release
+yum -y groupinstall "Xfce"
+yum -y install tigervnc-server xinetd openssh-server firewalld policycoreutils-python expect
+
+# Disable display managers
+for svc in gdm lightdm sddm lxdm; do
+  if systemctl list-unit-files | grep -q "^${svc}.service"; then
+    systemctl stop $svc || true
+    systemctl disable $svc || true
+    systemctl mask $svc || true
+  fi
+done
+
+systemctl enable xinetd sshd firewalld
+systemctl start xinetd sshd firewalld
+
+# Funkce pro vytvoření uživatele
+create_user() {
+  local USER="$1"
+  local PASS="$2"
+  local GROUP_OPT="$3"
+  if ! id "$USER" &>/dev/null; then
+    useradd -m -s /bin/bash $GROUP_OPT "$USER"
+    echo "${USER}:${PASS}" | chpasswd
+  fi
+  mkdir -p /home/$USER/.vnc
+  cat > /home/$USER/.vnc/xstartup <<'XSTART'
 #!/bin/sh
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
+xset s off
+xset s noblank
+xset -dpms
+exec startxfce4 &
+XSTART
+  chmod +x /home/$USER/.vnc/xstartup
+  chown -R $USER:$USER /home/$USER/.vnc
+}
 
-# --- Start D-Bus session (musí být první) ---
-if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-    eval "$(dbus-launch --sh-syntax --exit-with-session)"
-fi
+# Funkce pro vytvoření VNC hesla
+create_vnc_password() {
+  local USER="$1"
+  local PASS="$2"
+  local HOME="/home/$USER"
+  sudo -u $USER bash -c "echo $PASS | vncpasswd -f > ${HOME}/.vnc/passwd"
+  chmod 600 ${HOME}/.vnc/passwd
+  chown $USER:$USER ${HOME}/.vnc/passwd
+}
 
-# --- Nastavení input method ---
-export GTK_IM_MODULE=ibus
-export QT_IM_MODULE=ibus
-export QT4_IM_MODULE=ibus
-export XMODIFIERS="@im=ibus"
+# Funkce pro vytvoření služby xinetd
+create_xinetd_service() {
+  local PORT="$1"
+  local USER="$2"
+  local DISPLAY=$((PORT - 5900))
+  cat > /etc/xinetd.d/vnc${PORT} <<EOF
+service vnc${PORT}
+{
+  type           = UNLISTED
+  port           = ${PORT}
+  socket_type    = stream
+  protocol       = tcp
+  wait           = no
+  user           = ${USER}
+  server         = /usr/bin/Xvnc
+  server_args    = :${DISPLAY} -inetd -geometry ${GEOMETRY} -depth ${DEPTH} -rfbauth /home/${USER}/.vnc/passwd -SecurityTypes VncAuth -IdleTimeout ${IDLE_TIMEOUT_SEC}
+  disable        = no
+}
+EOF
+}
 
-# --- Spustit ibus-daemon ---
-nohup ibus-daemon -drx --xim >/dev/null 2>&1 &
+echo ">>> Vytvářím studenty p01–p25..."
+for i in $(seq -w ${P_START} $((P_START + P_COUNT - 1))); do
+  USER="${USER_PREFIX_P}${i}"
+  NUM=$(printf "%02d" ${i})
+  PASS="${NUM}${NUM}${NUM}"  # 010101
+  PORT=$((PORT_BASE_P + 10#$i))
+  create_user "$USER" "$PASS" ""
+  create_vnc_password "$USER" "$PASS"
+  create_xinetd_service "$PORT" "$USER"
+done
 
-# --- Spustit LXDE desktop ---
-exec /usr/bin/startlxde
+echo ">>> Vytvářím studenty q01–q25..."
+for i in $(seq -w ${Q_START} $((Q_START + Q_COUNT - 1))); do
+  USER="${USER_PREFIX_Q}${i}"
+  NUM=$(printf "%02d" ${i})
+  PASS="${NUM}${NUM}${NUM}"
+  PORT=$((PORT_BASE_Q + 10#$i))
+  create_user "$USER" "$PASS" ""
+  create_vnc_password "$USER" "$PASS"
+  create_xinetd_service "$PORT" "$USER"
+done
+
+echo ">>> Vytvářím učitele (pau,hor,han)..."
+teacher_port=${TEACHERS_START_PORT}
+for t in "${NORMAL_TEACHERS[@]}"; do
+  create_user "$t" "teacher123" ""
+  create_vnc_password "$t" "teacher123"
+  create_xinetd_service "$teacher_port" "$t"
+  teacher_port=$((teacher_port+1))
+done
+
+echo ">>> Vytvářím učitele ve wheel (zim,micha,hrn)..."
+for t in "${WHEEL_TEACHERS[@]}"; do
+  create_user "$t" "teacher123" "-G wheel"
+  create_vnc_password "$t" "teacher123"
+  create_xinetd_service "$teacher_port" "$t"
+  teacher_port=$((teacher_port+1))
+done
+
+echo ">>> Firewall – povoluji porty..."
+for rng in ${FIREWALL_PORT_RANGES}; do
+  firewall-cmd --permanent --add-port=${rng}/tcp || true
+done
+firewall-cmd --reload
+
+echo ">>> Restartuji xinetd..."
+systemctl restart xinetd
+
+echo
+echo "✅ Hotovo!"
+echo "-----------------------------------------------------"
+echo "Studenti p01–p25 → porty 5901–5925 (heslo = číslo 3×)"
+echo "Studenti q01–q25 → porty 5931–5955 (heslo = číslo 3×)"
+echo "Učitelé pau,hor,han,zim,micha,hrn → porty od 5961 výš"
+echo "VNC hesla nastavená, linuxové přihlášení se nevyžaduje."
+echo "Neaktivní session se ukončí po ${IDLE_TIMEOUT_MIN} minutách."
+echo "SFTP funkční – sshd běží. Wheel: zim, micha, hrn."
+echo "-----------------------------------------------------"
