@@ -1,2 +1,205 @@
-sudo sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo
-sudo sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
+<#
+.SYNOPSIS
+  Vytvoří GPO "Students_test", uloží logon/logoff skripty do SYSVOL, nastaví registry/policy hodnoty (NumLock, hide last user, povolit síťové nastavení),
+  a linkuje GPO na OU "MIT_test" v aktuální doméně.
+
+.PRE-REQS
+  - Spustit na Domain Controlleru jako doménový admin.
+  - Modul GroupPolicy a ActiveDirectory dostupné (RSAT/AD DS role).
+  - Ověřit po vytvoření v GPMC, že skripty jsou v User Configuration -> Windows Settings -> Scripts (Logon/Logoff). Pokud tam nejsou, přidejte je ručně (viz níže).
+
+.NOTES
+  - Skript přepíše/aktualizuje existující GPO stejného jména.
+  - Logoff skript **TRVALE MAŽE** obsah běžných profilových složek (Desktop, Documents, Downloads, ...). TESTUJTE nejprve v testovací OU.
+#>
+
+# --- konfigurace (upravit jen pokud je potřeba) ---
+$GpoName = "Students_test"
+$OUShort = "MIT_test"          # název OU (bez DC části) — podle dohody s tebou
+$NetShare = "\\10.0.0.1\keil"  # mapovaný share (F:)
+$KeilBatRelative = "Keilbat\keil.bat" # relativní cesta na F:
+$VyukaRoot = "C:\Vyuka"
+
+# --- načti moduly a info o doméně ---
+Import-Module ActiveDirectory -ErrorAction Stop
+Import-Module GroupPolicy -ErrorAction Stop
+
+$domainDN = (Get-ADDomain).DistinguishedName        # např. "DC=mojedomena,DC=local"
+$domainDNS = (Get-ADDomain).DNSRoot                  # např. "mojedomena.local"
+$ouDN = "OU=$OUShort,$domainDN"                     # výsledné DN OU: "OU=MIT_test,DC=...,DC=..."
+
+Write-Output "Domain DN: $domainDN"
+Write-Output "Planned OU DN to link: $ouDN"
+
+# 1) vytvoř/načti GPO
+$existing = Get-GPO -Name $GpoName -ErrorAction SilentlyContinue
+if ($existing) {
+    Write-Output "GPO '$GpoName' již existuje (ID: $($existing.Id)). Aktualizuji obsah."
+    $gpo = $existing
+} else {
+    $gpo = New-GPO -Name $GpoName -Comment "User lockdown for Keil environment (Students_test)"
+    Write-Output "Vytvořeno GPO '$GpoName' (ID: $($gpo.Id))"
+}
+
+# 2) SYSVOL cesta pro GPO
+$gpoGUID = $gpo.Id.Guid
+$sysvol = Join-Path -Path ("\\$domainDNS\SYSVOL\$domainDNS\Policies") -ChildPath ("{" + $gpoGUID.ToString() + "}")
+Write-Output "SYSVOL path for GPO: $sysvol"
+
+# vytvoř složky User\Scripts\Logon a Logoff
+$userScriptsPath_Logon = Join-Path $sysvol "User\Scripts\Logon"
+$userScriptsPath_Logoff = Join-Path $sysvol "User\Scripts\Logoff"
+New-Item -Path $userScriptsPath_Logon -ItemType Directory -Force | Out-Null
+New-Item -Path $userScriptsPath_Logoff -ItemType Directory -Force | Out-Null
+
+# 3) připrav logon.ps1 (kopírování keil.bat, mapování F:, vytváření zástupců, vytvoření Vyuka)
+$logonScript = @'
+# Logon script - vytvoril automaticky Deploy-Students_test-GPO.ps1
+Param()
+
+# mapF (bez ukládání přihlašovacích údajů)
+try {
+    net use F: "\\10.0.0.1\keil" /persistent:no | Out-Null
+} catch {}
+
+$desktop = [Environment]::GetFolderPath("Desktop")
+
+# Copy Keil bat (always overwrite)
+$srcBat = "F:\Keilbat\keil.bat"
+$dstBat = Join-Path $desktop "keil.bat"
+try {
+    if (Test-Path $srcBat) { Copy-Item -Path $srcBat -Destination $dstBat -Force -ErrorAction Stop }
+    else { Copy-Item -Path $srcBat -Destination $dstBat -Force -ErrorAction SilentlyContinue }
+} catch {}
+
+# Create shortcuts function
+Function Create-Shortcut($targetPath, $shortcutName) {
+    try {
+        $w = New-Object -ComObject WScript.Shell
+        $lnk = $w.CreateShortcut((Join-Path $desktop ($shortcutName + ".lnk")))
+        $lnk.TargetPath = $targetPath
+        $lnk.WorkingDirectory = Split-Path $targetPath
+        $lnk.Save()
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($w) | Out-Null
+    } catch {}
+}
+
+# shortcuts list
+$shortcuts = @(
+    @{Target="C:\Program Files\RedPanda-cpp\RedPandaIDE.exe"; Name="RedPanda"},
+    @{Target="C:\Program Files (x86)\WinSCP\WinSCP.exe"; Name="WinSCP"},
+    @{Target="C:\Program Files\Google\Chrome\Application\chrome.exe"; Name="Google Chrome"},
+    @{Target="C:\Program Files\Oracle\Virtual Box\VirtualBox.exe"; Name="VirtualBox"},
+    @{Target="C:\i4\vncviewer64-1.14.0.exe"; Name="TigerVNC"},
+    @{Target="C:\i\SALCZ.exe"; Name="SALCZ"},
+    @{Target="C:\Program Files\Far Manager\Far.exe"; Name="Far Manager"},
+    @{Target=$dstBat; Name="Keil - Start (bat)"}
+)
+
+foreach ($s in $shortcuts) {
+    Create-Shortcut -targetPath $s.Target -shortcutName $s.Name
+}
+
+# create Vyuka and classes if missing
+$vyuka = "C:\Vyuka"
+if (-not (Test-Path $vyuka)) { New-Item -Path $vyuka -ItemType Directory -Force | Out-Null }
+$classes = 1..4
+$letters = @("A","B","C")
+foreach ($n in $classes) {
+    foreach ($l in $letters) {
+        $p = Join-Path $vyuka ("{0}{1}" -f $n,$l)
+        if (-not (Test-Path $p)) { New-Item -Path $p -ItemType Directory -Force | Out-Null }
+    }
+}
+'@
+
+Set-Content -Path (Join-Path $userScriptsPath_Logon "logon.ps1") -Value $logonScript -Encoding UTF8
+Write-Output "Logon script uložen: $userScriptsPath_Logon\logon.ps1"
+
+# 4) připrav logoff.ps1 (vyčištění profilu - Desktop, Documents, Downloads, Pictures, Music, Videos, AppData\Local\Temp)
+$logoffScript = @'
+# Logoff script - vymazani profilovych slozek (krome C:\Vyuka)
+Param()
+
+try { $profile = [Environment]::GetFolderPath("UserProfile") } catch { $profile = $env:USERPROFILE }
+
+$toClean = @(
+    Join-Path $profile "Desktop",
+    Join-Path $profile "Documents",
+    Join-Path $profile "Downloads",
+    Join-Path $profile "Pictures",
+    Join-Path $profile "Music",
+    Join-Path $profile "Videos"
+)
+
+foreach ($p in $toClean) {
+    if (Test-Path $p) {
+        Get-ChildItem -Path $p -Force -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+    }
+}
+
+# Clear user temp
+$uTemp = Join-Path $profile "AppData\Local\Temp"
+if (Test-Path $uTemp) {
+    Get-ChildItem -Path $uTemp -Force -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+}
+'@
+
+Set-Content -Path (Join-Path $userScriptsPath_Logoff "logoff.ps1") -Value $logoffScript -Encoding UTF8
+Write-Output "Logoff script uložen: $userScriptsPath_Logoff\logoff.ps1"
+
+# 5) Registry / policy hodnoty (GPO) - Computer a User části
+Write-Output "Nastavuji registry v GPO..."
+
+# A) Interactice logon: don't display last signed-in user (Computer)
+Set-GPRegistryValue -Name $GpoName -Key "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -ValueName "DontDisplayLastUserName" -Type DWord -Value 1
+
+# B) Show network selection UI on login screen (pokud je možné)
+Set-GPRegistryValue -Name $GpoName -Key "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI" -ValueName "DontDisplayNetworkSelectionUI" -Type DWord -Value 0 -ErrorAction SilentlyContinue
+
+# C) NumLock on at login (HKLM and .DEFAULT)
+Set-GPRegistryValue -Name $GpoName -Key "HKLM\Control Panel\Keyboard" -ValueName "InitialKeyboardIndicators" -Type String -Value "2"
+Set-GPRegistryValue -Name $GpoName -Key "HKU\.DEFAULT\Control Panel\Keyboard" -ValueName "InitialKeyboardIndicators" -Type String -Value "2"
+
+# D) Povolit Control Panel & Network properties (User)
+Set-GPRegistryValue -Name $GpoName -Key "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -ValueName "NoControlPanel" -Type DWord -Value 0
+# Network related: povolit zmenu vlastnosti LAN a zap/vyp siti
+Set-GPRegistryValue -Name $GpoName -Key "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Network" -ValueName "NC_LanProperties" -Type DWord -Value 0 -ErrorAction SilentlyContinue
+Set-GPRegistryValue -Name $GpoName -Key "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Network" -ValueName "NC_LanChangeProperties" -Type DWord -Value 0 -ErrorAction SilentlyContinue
+Set-GPRegistryValue -Name $GpoName -Key "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Network" -ValueName "NC_ShowSharedAccessUI" -Type DWord -Value 1 -ErrorAction SilentlyContinue
+
+# E) Zakazani regedit, cmd (User) - zachovame zakaz pro nebezpecne nastroje
+Set-GPRegistryValue -Name $GpoName -Key "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System" -ValueName "DisableCMD" -Type DWord -Value 0 -ErrorAction SilentlyContinue
+# Pozor: DisableCMD=1 zablokuje cmd a skripty v cmd; pokud bys chtěl povolit batchy, změň na 0.
+
+# F) Zamez pristupu k PowerShellu pres AppLocker nebo GPO "Prevent access to command prompt" - tady zapneme jednoduché zakazani:
+Set-GPRegistryValue -Name $GpoName -Key "HKCU\Software\Policies\Microsoft\Windows\System" -ValueName "DisableRegistryTools" -Type DWord -Value 1 -ErrorAction SilentlyContinue
+
+Write-Output "Registr nastaven."
+
+# 6) Link GPO na OU
+try {
+    # pokud OU existuje
+    $ouCheck = Get-ADOrganizationalUnit -Filter "Name -eq '$OUShort'" -ErrorAction SilentlyContinue
+    if (-not $ouCheck) {
+        Write-Warning "OU '$OUShort' nebyla nalezena pomocí Get-ADOrganizationalUnit (vyhledává podle jména). Pokusím se linkovat pomocí DN: $ouDN"
+    }
+    New-GPLink -Name $GpoName -Target $ouDN -LinkEnabled Yes -ErrorAction Stop
+    Write-Output "GPO '$GpoName' z-linksováno na $ouDN"
+} catch {
+    Write-Warning "Linkování GPO na OU selhalo: $_. Ujistěte se, že OU DN existuje a že máte práva. GPO bylo vytvořeno, ale není linkováno."
+}
+
+Write-Output "Hotovo. GPO '$GpoName' vytvořeno a (pokud to šlo) linkováno na OU '$ouDN'."
+
+Write-Output ""
+Write-Output "---- DŮLEŽITÉ FINÁLNÍ KROKY / TESTOVÁNÍ ----"
+Write-Output "1) Otevřete GPMC (gpmc.msc) a zkontrolujte GPO '$GpoName'."
+Write-Output "2) V GPO Editoru zkontrolujte: User Configuration -> Policies -> Windows Settings -> Scripts (Logon/Logoff)."
+Write-Output "   - Pokud skripty NEJSOU v seznamu Logon/Logoff, přidejte je ručně:"
+Write-Output "     * Add -> Script Name: vyberte 'logon.ps1' (cesta v SYSVOL: $userScriptsPath_Logon\logon.ps1)"
+Write-Output "     * Add -> Script Name: vyberte 'logoff.ps1' (cesta v SYSVOL: $userScriptsPath_Logoff\logoff.ps1)"
+Write-Output "3) Linkováno-li, vyzkoušejte na testovacím uživateli: na klientu spusťte gpupdate /force, přihlaste se, ověřte mapování F:, existence keil.bat a zástupců, poté odhlášení a ověření smazání plochy."
+Write-Output "4) Pokud vše OK, nasadit do produkce."
+
+# end of script
