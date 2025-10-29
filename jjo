@@ -1,11 +1,22 @@
-Get-Service NTDS, DNS, NETLOGON, KDC, W32Time, DHCPServer, WsusService, DFSR, W3SVC | Select-Object Name, DisplayName, Status, StartType | Format-Table -AutoSize
+# Authoritative restore SYSVOL
+Stop-Service DFSR
 
-dcdiag /v > C:\dcdiag-po-restartu.txt
-notepad C:\dcdiag-po-restartu.txt
+# Nastavit authoritative
+wmic /namespace:\\root\microsoftdfs path dfsrMachineConfig set StopReplicationOnAutoRecovery=false
 
-repadmin /showrepl
+# Spustit DFSR
+Start-Service DFSR
 
-net share
-Test-Path "C:\Windows\SYSVOL\sysvol\in.spsehavirov.cz"
+# Vynutit poll
+dfsrdiag pollad
 
-Get-EventLog -LogName System -EntryType Error -Newest 20 | Select-Object TimeGenerated, Source, EventID, Message | Format-Table -AutoSize
+# Zkontrolovat, odkud pochází 45.10.97.11
+Get-DnsClientServerAddress
+
+# Mělo by být jen 10.0.0.2 a 127.0.0.1
+# Pokud tam je 45.10.97.11, změnit:
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses ("10.0.0.2","127.0.0.1")
+
+# Registrovat DNS záznamy znovu
+ipconfig /registerdns
+nltest /dsregdns
