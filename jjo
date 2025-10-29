@@ -1,108 +1,11 @@
-# DIAGNOSTICKÝ SKRIPT PRO DOMAIN CONTROLLER
-# Spusťte jako Administrátor
+# Zobrazit DNS konfiguraci
+Get-DnsClientGlobalSetting
+Get-DnsClient
 
-$outputFile = "C:\DC-Diagnostics-$(Get-Date -Format 'yyyy-MM-dd-HHmm').txt"
+# Zobrazit suffix search list
+Get-DnsClientGlobalSetting | Select-Object SuffixSearchList
+(Get-DnsClient).ConnectionSpecificSuffix
 
-Write-Host "Zahajuji diagnostiku Domain Controlleru..." -ForegroundColor Green
-Write-Host "Výsledky budou uloženy do: $outputFile" -ForegroundColor Yellow
-
-# Začátek výstupu
-"=" * 80 | Out-File $outputFile
-"DIAGNOSTIKA DOMAIN CONTROLLERU - $(Get-Date)" | Out-File $outputFile -Append
-"=" * 80 | Out-File $outputFile -Append
-
-# 1. Základní info o serveru
-"`n### 1. ZÁKLADNÍ INFORMACE O SERVERU ###" | Out-File $outputFile -Append
-"Název počítače: $env:COMPUTERNAME" | Out-File $outputFile -Append
-"Doména: $env:USERDNSDOMAIN" | Out-File $outputFile -Append
-Get-ComputerInfo | Select-Object CsDomain, CsDomainRole, OsName, OsVersion | Out-File $outputFile -Append
-
-# 2. Síťová konfigurace
-"`n### 2. SÍŤOVÁ KONFIGURACE ###" | Out-File $outputFile -Append
-Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike "127.*"} | Select-Object IPAddress, InterfaceAlias, PrefixLength | Out-File $outputFile -Append
-Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object {$_.ServerAddresses} | Out-File $outputFile -Append
-
-# 3. Sdílené složky (NETLOGON, SYSVOL)
-"`n### 3. SDÍLENÉ SLOŽKY ###" | Out-File $outputFile -Append
-net share | Out-File $outputFile -Append
-
-# 4. SYSVOL kontrola
-"`n### 4. SYSVOL SLOŽKY ###" | Out-File $outputFile -Append
-"Test-Path C:\Windows\SYSVOL\sysvol: $(Test-Path 'C:\Windows\SYSVOL\sysvol')" | Out-File $outputFile -Append
-if (Test-Path "C:\Windows\SYSVOL\sysvol") {
-    Get-ChildItem "C:\Windows\SYSVOL\sysvol" | Out-File $outputFile -Append
-}
-
-# 5. Domain Controllers v doméně
-"`n### 5. DOMAIN CONTROLLERS V DOMÉNĚ ###" | Out-File $outputFile -Append
-try {
-    Get-ADDomainController -Filter * | Select-Object Name, IPv4Address, IsGlobalCatalog, IsReadOnly, OperatingSystem | Out-File $outputFile -Append
-} catch {
-    "Chyba při získávání DC: $_" | Out-File $outputFile -Append
-}
-
-# 6. FSMO Role
-"`n### 6. FSMO ROLE ###" | Out-File $outputFile -Append
-netdom query fsmo | Out-File $outputFile -Append
-
-# 7. Stav klíčových služeb
-"`n### 7. STAV SLUŽEB ###" | Out-File $outputFile -Append
-$services = @("NTDS", "DNS", "NETLOGON", "KDC", "W32Time", "DHCPServer", "WsusService", "W3SVC")
-foreach ($svc in $services) {
-    try {
-        $service = Get-Service $svc -ErrorAction SilentlyContinue
-        if ($service) {
-            "$($service.DisplayName): $($service.Status) (StartType: $($service.StartType))" | Out-File $outputFile -Append
-        } else {
-            "$svc: Služba nenalezena" | Out-File $outputFile -Append
-        }
-    } catch {
-        "$svc: Chyba - $_" | Out-File $outputFile -Append
-    }
-}
-
-# 8. DNS testy
-"`n### 8. DNS TESTY ###" | Out-File $outputFile -Append
-"nslookup $env:USERDNSDOMAIN" | Out-File $outputFile -Append
-nslookup $env:USERDNSDOMAIN | Out-File $outputFile -Append
-"nslookup $env:COMPUTERNAME.$env:USERDNSDOMAIN" | Out-File $outputFile -Append
-nslookup "$env:COMPUTERNAME.$env:USERDNSDOMAIN" | Out-File $outputFile -Append
-
-# 9. Replikace
-"`n### 9. AD REPLIKACE ###" | Out-File $outputFile -Append
-repadmin /showrepl | Out-File $outputFile -Append
-
-# 10. DCDiag (nejdůležitější)
-"`n### 10. DCDIAG - KOMPLETNÍ DIAGNOSTIKA ###" | Out-File $outputFile -Append
-Write-Host "Spouštím dcdiag (může trvat 2-5 minut)..." -ForegroundColor Yellow
-dcdiag /v | Out-File $outputFile -Append
-
-# 11. Event Log - poslední chyby
-"`n### 11. POSLEDNÍ CHYBY Z EVENT LOGU ###" | Out-File $outputFile -Append
-"`nSystem Log:" | Out-File $outputFile -Append
-Get-EventLog -LogName System -EntryType Error -Newest 10 | Select-Object TimeGenerated, Source, EventID, Message | Out-File $outputFile -Append
-"`nApplication Log:" | Out-File $outputFile -Append
-Get-EventLog -LogName Application -EntryType Error -Newest 10 | Select-Object TimeGenerated, Source, EventID, Message | Out-File $outputFile -Append
-
-# 12. WSUS konfigurace
-"`n### 12. WSUS KONFIGURACE ###" | Out-File $outputFile -Append
-try {
-    $wsus = Get-WsusServer -ErrorAction Stop
-    $config = $wsus.GetConfiguration()
-    "WSUS Server: $($wsus.Name):$($wsus.PortNumber)" | Out-File $outputFile -Append
-    "Content Path: $($config.LocalContentCachePath)" | Out-File $outputFile -Append
-    "Test-Path: $(Test-Path $config.LocalContentCachePath)" | Out-File $outputFile -Append
-} catch {
-    "WSUS: Chyba - $_" | Out-File $outputFile -Append
-}
-
-# Konec
-"`n" + "=" * 80 | Out-File $outputFile -Append
-"DIAGNOSTIKA DOKONČENA - $(Get-Date)" | Out-File $outputFile -Append
-"=" * 80 | Out-File $outputFile -Append
-
-Write-Host "`nDiagnostika dokončena!" -ForegroundColor Green
-Write-Host "Výsledky uloženy do: $outputFile" -ForegroundColor Yellow
-Write-Host "`nOtevírám soubor..." -ForegroundColor Cyan
-Start-Sleep -Seconds 2
-notepad $outputFile
+# Zobrazit domain suffix
+$env:USERDNSDOMAIN
+systeminfo | findstr /B /C:"Domain"
