@@ -1,12 +1,9 @@
-# Zastavit DFSR (už je zastavený)
-Stop-Service DFSR -ErrorAction SilentlyContinue
+# Zkontrolovat DNS servery
+Get-DnsClientServerAddress -AddressFamily IPv4
 
-# Nastavit authoritative restore přes PowerShell
-$dfsrConfig = Get-CimInstance -Namespace root/microsoftdfs -ClassName dfsrMachineConfig
-$dfsrConfig | Set-CimInstance -Property @{StopReplicationOnAutoRecovery=$false}
+# Změnit na správné (pokud tam je 45.10.97.11)
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses ("10.0.0.2","127.0.0.1")
 
-# Spustit DFSR
-Start-Service DFSR
-
-# Vynutit poll
-dfsrdiag pollad
+# Registrovat DNS
+ipconfig /registerdns
+nltest /dsregdns
