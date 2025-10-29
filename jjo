@@ -1,11 +1,11 @@
-# Zobrazit DNS konfiguraci
-Get-DnsClientGlobalSetting
-Get-DnsClient
+Get-Service NTDS, DNS, NETLOGON, KDC, W32Time, DHCPServer, WsusService, DFSR, W3SVC | Select-Object Name, DisplayName, Status, StartType | Format-Table -AutoSize
 
-# Zobrazit suffix search list
-Get-DnsClientGlobalSetting | Select-Object SuffixSearchList
-(Get-DnsClient).ConnectionSpecificSuffix
+dcdiag /v > C:\dcdiag-po-restartu.txt
+notepad C:\dcdiag-po-restartu.txt
 
-# Zobrazit domain suffix
-$env:USERDNSDOMAIN
-systeminfo | findstr /B /C:"Domain"
+repadmin /showrepl
+
+net share
+Test-Path "C:\Windows\SYSVOL\sysvol\in.spsehavirov.cz"
+
+Get-EventLog -LogName System -EntryType Error -Newest 20 | Select-Object TimeGenerated, Source, EventID, Message | Format-Table -AutoSize
